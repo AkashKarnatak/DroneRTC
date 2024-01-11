@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -45,8 +46,8 @@ func init() {
 type registryFunc func(string) error
 
 type WebsocketMsg struct {
-  Channel string `json:"channel"`
-  Data    string `json:"data"`
+	Channel string `json:"channel"`
+	Data    string `json:"data"`
 }
 
 type Websocket struct {
@@ -243,7 +244,7 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 
 func (pc *RTCPeerConnection) Close() error {
 	// close all associated goroutines
-  log.Println("closing pc channel")
+	log.Println("closing pc channel")
 	close(pc.closeCh)
 	err := pc.Conn.Close()
 	if err != nil {
@@ -253,8 +254,13 @@ func (pc *RTCPeerConnection) Close() error {
 }
 
 func main() {
+	host := os.Getenv("HOST")
+	if host == "" {
+		log.Fatalln("Forgot to set HOST environment variable")
+	}
+
 	ws := NewWebsocket()
-	err := ws.Connect("localhost:8080")
+	err := ws.Connect(host)
 	if err != nil {
 		log.Fatalln("connect:", err)
 	}
