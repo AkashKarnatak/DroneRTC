@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"time"
 
 	"github.com/gorilla/websocket"
 	_ "github.com/pion/mediadevices/pkg/driver/camera"
@@ -44,8 +45,8 @@ func init() {
 type registryFunc func(string) error
 
 type WebsocketMsg struct {
-	Channel string
-	Data    string
+  Channel string `json:"channel"`
+  Data    string `json:"data"`
 }
 
 type Websocket struct {
@@ -69,7 +70,7 @@ func (ws *Websocket) Emit(channel string, data string) error {
 	if err != nil {
 		return err
 	}
-	err = ws.Conn.WriteMessage(websocket.TextMessage, []byte(msgJson))
+	err = ws.Conn.WriteMessage(websocket.TextMessage, msgJson)
 	if err != nil {
 		return err
 	}
@@ -101,10 +102,19 @@ func (ws *Websocket) Connect(host string) error {
 	ws.Conn = c
 
 	go func() {
+		ticker := time.NewTicker(20 * time.Second)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ws.closeCh:
 				return
+			case <-ticker.C:
+				err := ws.Emit("clientsOnline", "")
+				if err != nil {
+					log.Println("emit:", err)
+					return
+				}
 			default:
 				_, msgJson, err := ws.Conn.ReadMessage()
 				if err != nil {
@@ -156,11 +166,11 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		// TODO: do not close pc on all these states
 		// trigger ice restart
 		//  https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceConnectionState
-		if state == webrtc.ICEConnectionStateFailed || state == webrtc.ICEConnectionStateClosed || state == webrtc.ICEConnectionStateDisconnected {
+		if state == webrtc.ICEConnectionStateFailed {
 			if err := pc.Close(); err != nil {
 				log.Fatalln("close:", err)
 			}
-      pc = NewRTCPeerConnection(ws)
+			pc = NewRTCPeerConnection(ws)
 		}
 	})
 
@@ -214,11 +224,26 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		}
 	}()
 
+	dataJson, err := json.Marshal(struct {
+		Type string `json:"type"`
+		Id   string `json:"id"`
+	}{
+		Type: "drone",
+		Id:   "droneId",
+	})
+	if err != nil {
+		log.Fatalln("marshal:", err)
+	}
+	err = ws.Emit("match", string(dataJson))
+	if err != nil {
+		log.Fatalln("emit:", err)
+	}
 	return pc
 }
 
 func (pc *RTCPeerConnection) Close() error {
 	// close all associated goroutines
+  log.Println("closing pc channel")
 	close(pc.closeCh)
 	err := pc.Conn.Close()
 	if err != nil {
@@ -229,10 +254,10 @@ func (pc *RTCPeerConnection) Close() error {
 
 func main() {
 	ws := NewWebsocket()
-  err := ws.Connect("localhost:7070")
-  if err != nil {
-    log.Fatalln("connect:", err)
-  }
+	err := ws.Connect("localhost:8080")
+	if err != nil {
+		log.Fatalln("connect:", err)
+	}
 	defer ws.Close()
 
 	pc := NewRTCPeerConnection(ws)
@@ -270,7 +295,7 @@ func main() {
 	})
 
 	ws.Register("message", func(data string) error {
-    log.Println("Message recv:", data)
+		log.Println("Message recv:", data)
 		return nil
 	})
 
@@ -278,12 +303,12 @@ func main() {
 		var ice webrtc.ICECandidateInit
 		err := json.Unmarshal([]byte(data), &ice)
 		if err != nil {
-      return err
+			return err
 		}
 		err = pc.Conn.AddICECandidate(ice)
-    if err != nil {
-      return err
-    }
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 
@@ -291,19 +316,19 @@ func main() {
 		var desc webrtc.SessionDescription
 		err := json.Unmarshal([]byte(data), &desc)
 		if err != nil {
-      return err
+			return err
 		}
-    err = pc.Conn.SetRemoteDescription(desc)
-    if err != nil {
-      return err
-    }
+		err = pc.Conn.SetRemoteDescription(desc)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 
 	ws.Register("disconnect", func(data string) error {
 		log.Println("Received disconnect request")
-    pc.Close()
-    pc = NewRTCPeerConnection(ws)
+		pc.Close()
+		pc = NewRTCPeerConnection(ws)
 		return nil
 	})
 
