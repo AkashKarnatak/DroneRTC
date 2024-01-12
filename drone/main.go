@@ -12,7 +12,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	_ "github.com/pion/mediadevices/pkg/driver/camera"
-	_ "github.com/pion/mediadevices/pkg/driver/microphone"
 	"github.com/pion/webrtc/v3"
 )
 
