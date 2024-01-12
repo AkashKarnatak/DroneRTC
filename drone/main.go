@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -68,11 +69,11 @@ func (ws *Websocket) Emit(channel string, data string) error {
 		Data:    data,
 	})
 	if err != nil {
-		return err
+    return fmt.Errorf("marshal: %w", err)
 	}
 	err = ws.Conn.WriteMessage(websocket.TextMessage, msgJson)
 	if err != nil {
-		return err
+    return fmt.Errorf("wswrite: %w", err)
 	}
 	return nil
 }
@@ -88,7 +89,7 @@ func (ws *Websocket) Propagate(channel string, data string) error {
 	}
 	err := callback(data)
 	if err != nil {
-		return err
+    return fmt.Errorf("callback: %w", err)
 	}
 	return nil
 }
@@ -97,7 +98,7 @@ func (ws *Websocket) Connect(host string) error {
 	u := url.URL{Scheme: "ws", Host: host, Path: "/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		return err
+    return fmt.Errorf("dial: %w", err)
 	}
 	ws.Conn = c
 
@@ -140,7 +141,7 @@ func (ws *Websocket) Close() error {
 	close(ws.closeCh)
 	err := ws.Conn.Close()
 	if err != nil {
-		return err
+    return fmt.Errorf("wsclose: %w", err)
 	}
 	return nil
 }
@@ -248,7 +249,7 @@ func (pc *RTCPeerConnection) Close() error {
 	close(pc.closeCh)
 	err := pc.Conn.Close()
 	if err != nil {
-		return err
+    return fmt.Errorf("pcclose: %w", err)
 	}
 	return nil
 }
@@ -271,7 +272,7 @@ func main() {
 	ws.Register("connected", func(data string) error {
 		err := ws.Emit("connected", "Hello from drone")
 		if err != nil {
-			return err
+      return fmt.Errorf("emit: %w", err)
 		}
 		return nil
 	})
@@ -279,19 +280,19 @@ func main() {
 	ws.Register("begin", func(data string) error {
 		offer, err := pc.Conn.CreateOffer(nil)
 		if err != nil {
-			return err
+      return fmt.Errorf("createoffer: %w", err)
 		}
 		offerJson, err := json.Marshal(offer)
 		if err != nil {
-			return err
+      return fmt.Errorf("marshal: %w", err)
 		}
 		err = ws.Emit("description", string(offerJson))
 		if err != nil {
-			return err
+      return fmt.Errorf("emit: %w", err)
 		}
 		err = pc.Conn.SetLocalDescription(offer)
 		if err != nil {
-			return err
+      return fmt.Errorf("setlocaldesc: %w", err)
 		}
 		return nil
 	})
@@ -309,11 +310,11 @@ func main() {
 		var ice webrtc.ICECandidateInit
 		err := json.Unmarshal([]byte(data), &ice)
 		if err != nil {
-			return err
+      return fmt.Errorf("unmarshal: %w", err)
 		}
 		err = pc.Conn.AddICECandidate(ice)
 		if err != nil {
-			return err
+      return fmt.Errorf("addice: %w", err)
 		}
 		return nil
 	})
@@ -322,11 +323,11 @@ func main() {
 		var desc webrtc.SessionDescription
 		err := json.Unmarshal([]byte(data), &desc)
 		if err != nil {
-			return err
+      return fmt.Errorf("unmarshal: %w", err)
 		}
 		err = pc.Conn.SetRemoteDescription(desc)
 		if err != nil {
-			return err
+      return fmt.Errorf("setremovedesc: %w", err)
 		}
 		return nil
 	})
