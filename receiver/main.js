@@ -9,14 +9,30 @@ let pc
 const $videoPeer = $('#video-peer')
 const $messageBox = $('#message-box')
 const $sendBtn = $('#send-btn')
+const $loader = $('#peer-video-loader')
 
 $sendBtn.addEventListener('click', () => {
+  console.log('Sending msg:', $messageBox.value)
   ws.emit('msg', $messageBox.value)
   $messageBox.value = ''
+})
+$messageBox.focus()
+$messageBox.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') {
+    $sendBtn.click()
+    return e.preventDefault()
+  }
+})
+
+// hide loader when video connected
+$videoPeer.addEventListener('play', () => {
+  $loader.style.display = 'none'
 })
 
 const initializeConnection = async () => {
   console.log('creating rtc')
+
+  $loader.style.display = 'inline-block' // show loader
 
   const iceConfig = {
     iceServers: [

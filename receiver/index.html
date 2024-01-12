@@ -1,21 +1,34 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <title></title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-      video {
-        background: #ccc;
-      }
-    </style>
-  </head>
-  <body>
-    <video id="video-peer" width="70%" muted autoplay playsinline></video>
-    <br>
-    <label for="message"></label>
-    <input id="message-box" name="message" value="">
-    <button id="send-btn">send</button>
-    <script defer src="/main.js" type="module"></script>
-  </body>
+
+<head>
+  <title></title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+  <header>
+    <nav id="navbar">
+      <!-- <h3 id="logo">DroneRTC</h3> -->
+      <img src="./assets/logo-alt.svg" id="logo" alt="DroneRTC">
+    </nav>
+  </header>
+  <main id="main">
+    <div id="video-container">
+      <video id="video-peer" width="200px" muted autoplay playsinline></video>
+      <div id="peer-video-loader"></div>
+    </div>
+    <div id="message-container">
+      <label for="message"></label>
+      <input id="message-box" name="message" value="" />
+      <button id="send-btn" class="button">Send</button>
+    </div>
+  </main>
+  <div id="main"></div>
+  <script defer src="/main.js" type="module"></script>
+</body>
+
 </html>
