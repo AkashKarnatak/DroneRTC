@@ -18,7 +18,7 @@ import (
 
 var iceConfig webrtc.Configuration
 var rtpListener *net.UDPConn
-var pc *webrtc.PeerConnection
+var pc *RTCPeerConnection
 
 func init() {
 	iceConfig = webrtc.Configuration{
@@ -69,11 +69,11 @@ func (ws *Websocket) Emit(channel string, data string) error {
 		Data:    data,
 	})
 	if err != nil {
-    return fmt.Errorf("marshal: %w", err)
+		return fmt.Errorf("marshal: %w", err)
 	}
 	err = ws.Conn.WriteMessage(websocket.TextMessage, msgJson)
 	if err != nil {
-    return fmt.Errorf("wswrite: %w", err)
+		return fmt.Errorf("wswrite: %w", err)
 	}
 	return nil
 }
@@ -89,7 +89,7 @@ func (ws *Websocket) Propagate(channel string, data string) error {
 	}
 	err := callback(data)
 	if err != nil {
-    return fmt.Errorf("callback: %w", err)
+		return fmt.Errorf("callback: %w", err)
 	}
 	return nil
 }
@@ -98,7 +98,7 @@ func (ws *Websocket) Connect(host string) error {
 	u := url.URL{Scheme: "ws", Host: host, Path: "/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-    return fmt.Errorf("dial: %w", err)
+		return fmt.Errorf("dial: %w", err)
 	}
 	ws.Conn = c
 
@@ -125,11 +125,11 @@ func (ws *Websocket) Connect(host string) error {
 				var msg WebsocketMsg
 				err = json.Unmarshal([]byte(msgJson), &msg)
 				if err != nil {
-					log.Fatalln("unmarshal:", err)
+					log.Println("unmarshal:", err)
 				}
 				err = ws.Propagate(msg.Channel, msg.Data)
 				if err != nil {
-					log.Fatalln("propagate:", err)
+					log.Println("propagate:", err)
 				}
 			}
 		}
@@ -141,7 +141,7 @@ func (ws *Websocket) Close() error {
 	close(ws.closeCh)
 	err := ws.Conn.Close()
 	if err != nil {
-    return fmt.Errorf("wsclose: %w", err)
+		return fmt.Errorf("wsclose: %w", err)
 	}
 	return nil
 }
@@ -158,10 +158,15 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 	var err error
 	pc.Conn, err = webrtc.NewPeerConnection(iceConfig)
 	if err != nil {
-		log.Fatalln("newrtc", err)
+		log.Println("newrtc", err)
+		err := pc.Close()
+		if err != nil {
+			log.Println("pclose:", err)
+		}
+		pc = NewRTCPeerConnection(ws)
 	}
 
-  log.Println("Created new rtc")
+	log.Println("Created new rtc")
 	pc.Conn.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		log.Println("Connection State has changed:", state.String())
 
@@ -170,7 +175,7 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		//  https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceConnectionState
 		if state == webrtc.ICEConnectionStateFailed {
 			if err := pc.Close(); err != nil {
-				log.Fatalln("close:", err)
+				log.Println("pcclose:", err)
 			}
 			pc = NewRTCPeerConnection(ws)
 		}
@@ -183,23 +188,23 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 
 		iceJson, err := json.Marshal(c.ToJSON())
 		if err != nil {
-			log.Fatalln("marshal:", err)
+			log.Println("marshal:", err)
 		}
 
 		err = ws.Emit("iceCandidate", string(iceJson))
 		if err != nil {
-			log.Fatalln("emit:", err)
+			log.Println("emit:", err)
 		}
 	})
 
 	// Create a video track
 	track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8}, "video", "pion")
 	if err != nil {
-		log.Fatalln("newtrack:", err)
+		log.Println("newtrack:", err)
 	}
 	_, err = pc.Conn.AddTrack(track)
 	if err != nil {
-		log.Fatalln("addtrack:", err)
+		log.Println("addtrack:", err)
 	}
 
 	go func() {
@@ -212,7 +217,7 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 			default:
 				n, _, err := rtpListener.ReadFrom(inboundRTPPacket)
 				if err != nil {
-					log.Fatalln("readfrom:", err)
+					log.Println("readfrom:", err)
 				}
 
 				if _, err = track.Write(inboundRTPPacket[:n]); err != nil {
@@ -220,7 +225,7 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 						log.Println("Peer connection closed")
 						return
 					}
-					log.Fatalln("write:", err)
+					log.Println("write:", err)
 				}
 			}
 		}
@@ -234,11 +239,11 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		Id:   "droneId",
 	})
 	if err != nil {
-		log.Fatalln("marshal:", err)
+		log.Println("marshal:", err)
 	}
 	err = ws.Emit("match", string(dataJson))
 	if err != nil {
-		log.Fatalln("emit:", err)
+		log.Println("emit:", err)
 	}
 	return pc
 }
@@ -249,9 +254,17 @@ func (pc *RTCPeerConnection) Close() error {
 	close(pc.closeCh)
 	err := pc.Conn.Close()
 	if err != nil {
-    return fmt.Errorf("pcclose: %w", err)
+		return fmt.Errorf("pcclose: %w", err)
 	}
 	return nil
+}
+
+func resetPeerConnection(ws *Websocket) {
+	err := pc.Close()
+	if err != nil {
+		log.Println("pcclose:", err)
+	}
+	pc = NewRTCPeerConnection(ws)
 }
 
 func main() {
@@ -272,7 +285,7 @@ func main() {
 	ws.Register("connected", func(data string) error {
 		err := ws.Emit("connected", "Hello from drone")
 		if err != nil {
-      return fmt.Errorf("emit: %w", err)
+			return fmt.Errorf("emit: %w", err)
 		}
 		return nil
 	})
@@ -280,19 +293,23 @@ func main() {
 	ws.Register("begin", func(data string) error {
 		offer, err := pc.Conn.CreateOffer(nil)
 		if err != nil {
-      return fmt.Errorf("createoffer: %w", err)
+      log.Println("createoffer:", err)
+      resetPeerConnection(ws)
 		}
 		offerJson, err := json.Marshal(offer)
 		if err != nil {
-      return fmt.Errorf("marshal: %w", err)
+      log.Println("marshal:", err)
+      resetPeerConnection(ws)
 		}
 		err = ws.Emit("description", string(offerJson))
 		if err != nil {
-      return fmt.Errorf("emit: %w", err)
+      log.Println("emit:", err)
+      resetPeerConnection(ws)
 		}
 		err = pc.Conn.SetLocalDescription(offer)
 		if err != nil {
-      return fmt.Errorf("setlocaldesc: %w", err)
+      log.Println("setlocaldesc:", err)
+      resetPeerConnection(ws)
 		}
 		return nil
 	})
@@ -310,11 +327,11 @@ func main() {
 		var ice webrtc.ICECandidateInit
 		err := json.Unmarshal([]byte(data), &ice)
 		if err != nil {
-      return fmt.Errorf("unmarshal: %w", err)
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		err = pc.Conn.AddICECandidate(ice)
 		if err != nil {
-      return fmt.Errorf("addice: %w", err)
+			return fmt.Errorf("addice: %w", err)
 		}
 		return nil
 	})
@@ -323,19 +340,19 @@ func main() {
 		var desc webrtc.SessionDescription
 		err := json.Unmarshal([]byte(data), &desc)
 		if err != nil {
-      return fmt.Errorf("unmarshal: %w", err)
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		err = pc.Conn.SetRemoteDescription(desc)
 		if err != nil {
-      return fmt.Errorf("setremovedesc: %w", err)
+      log.Println("setremovedesc:", err)
+      resetPeerConnection(ws)
 		}
 		return nil
 	})
 
 	ws.Register("disconnect", func(data string) error {
 		log.Println("Received disconnect request")
-		pc.Close()
-		pc = NewRTCPeerConnection(ws)
+    resetPeerConnection(ws)
 		return nil
 	})
 
