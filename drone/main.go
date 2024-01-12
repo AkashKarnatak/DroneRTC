@@ -161,6 +161,7 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		log.Fatalln("newrtc", err)
 	}
 
+  log.Println("Created new rtc")
 	pc.Conn.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		log.Println("Connection State has changed:", state.String())
 
