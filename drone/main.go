@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -54,6 +55,7 @@ type Websocket struct {
 	Conn     *websocket.Conn
 	registry map[string]registryFunc
 	closeCh  chan struct{}
+	wg       sync.WaitGroup
 }
 
 func NewWebsocket() *Websocket {
@@ -102,7 +104,9 @@ func (ws *Websocket) Connect(host string) error {
 	}
 	ws.Conn = c
 
+	ws.wg.Add(1)
 	go func() {
+		defer ws.wg.Done()
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 
@@ -139,6 +143,7 @@ func (ws *Websocket) Connect(host string) error {
 
 func (ws *Websocket) Close() error {
 	close(ws.closeCh)
+	ws.wg.Wait()
 	err := ws.Conn.Close()
 	if err != nil {
 		return fmt.Errorf("wsclose: %w", err)
@@ -149,10 +154,11 @@ func (ws *Websocket) Close() error {
 type RTCPeerConnection struct {
 	Conn    *webrtc.PeerConnection
 	closeCh chan struct{}
+	wg      sync.WaitGroup
 }
 
 func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
-	pc := &RTCPeerConnection{
+	pc = &RTCPeerConnection{
 		closeCh: make(chan struct{}),
 	}
 	var err error
@@ -166,18 +172,35 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		pc = NewRTCPeerConnection(ws)
 	}
 
-	log.Println("Created new rtc")
+	log.Println("Created new rtc", pc)
 	pc.Conn.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		log.Println("Connection State has changed:", state.String())
 
 		// TODO: do not close pc on all these states
 		// trigger ice restart
 		//  https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceConnectionState
-		if state == webrtc.ICEConnectionStateFailed {
-			if err := pc.Close(); err != nil {
-				log.Println("pcclose:", err)
+		if state == webrtc.ICEConnectionStateDisconnected || state == webrtc.ICEConnectionStateFailed {
+			offer, err := pc.Conn.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
+			if err != nil {
+				log.Println("restart:", err, pc)
+				resetPeerConnection(ws)
 			}
-			pc = NewRTCPeerConnection(ws)
+			offerJson, err := json.Marshal(offer)
+			if err != nil {
+				log.Println("marshal:", err)
+				resetPeerConnection(ws)
+			}
+			err = ws.Emit("description", string(offerJson))
+			if err != nil {
+				log.Println("emit:", err)
+				resetPeerConnection(ws)
+			}
+			err = pc.Conn.SetLocalDescription(offer)
+			if err != nil {
+				log.Println("setlocaldesc:", err)
+				resetPeerConnection(ws)
+			}
+			log.Println("Trying ice restart")
 		}
 	})
 
@@ -207,7 +230,9 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		log.Println("addtrack:", err)
 	}
 
+	pc.wg.Add(1)
 	go func() {
+		defer pc.wg.Done()
 		// Read RTP packets forever and send them to the WebRTC Client
 		inboundRTPPacket := make([]byte, 1600) // UDP MTU
 		for {
@@ -252,6 +277,7 @@ func (pc *RTCPeerConnection) Close() error {
 	// close all associated goroutines
 	log.Println("closing pc channel")
 	close(pc.closeCh)
+	pc.wg.Wait()
 	err := pc.Conn.Close()
 	if err != nil {
 		return fmt.Errorf("pcclose: %w", err)
@@ -281,7 +307,7 @@ func main() {
 	}
 	defer ws.Close()
 
-	pc := NewRTCPeerConnection(ws)
+	pc = NewRTCPeerConnection(ws)
 
 	ws.Register("connected", func(data string) error {
 		err := ws.Emit("connected", "Hello from drone")
@@ -294,46 +320,23 @@ func main() {
 	ws.Register("begin", func(data string) error {
 		offer, err := pc.Conn.CreateOffer(nil)
 		if err != nil {
-			log.Println("createoffer:", err)
-			log.Println("Resetting rtc")
-			err := pc.Close()
-			if err != nil {
-				log.Println("pcclose:", err)
-			}
-			pc = NewRTCPeerConnection(ws)
+			log.Println("createoffer:", err, pc)
+			resetPeerConnection(ws)
 		}
 		offerJson, err := json.Marshal(offer)
 		if err != nil {
 			log.Println("marshal:", err)
-			log.Println("createoffer:", err)
-			log.Println("Resetting rtc")
-			err := pc.Close()
-			if err != nil {
-				log.Println("pcclose:", err)
-			}
-			pc = NewRTCPeerConnection(ws)
+			resetPeerConnection(ws)
 		}
 		err = ws.Emit("description", string(offerJson))
 		if err != nil {
 			log.Println("emit:", err)
-			log.Println("createoffer:", err)
-			log.Println("Resetting rtc")
-			err := pc.Close()
-			if err != nil {
-				log.Println("pcclose:", err)
-			}
-			pc = NewRTCPeerConnection(ws)
+			resetPeerConnection(ws)
 		}
 		err = pc.Conn.SetLocalDescription(offer)
 		if err != nil {
 			log.Println("setlocaldesc:", err)
-			log.Println("createoffer:", err)
-			log.Println("Resetting rtc")
-			err := pc.Close()
-			if err != nil {
-				log.Println("pcclose:", err)
-			}
-			pc = NewRTCPeerConnection(ws)
+			resetPeerConnection(ws)
 		}
 		return nil
 	})
@@ -369,26 +372,14 @@ func main() {
 		err = pc.Conn.SetRemoteDescription(desc)
 		if err != nil {
 			log.Println("setremovedesc:", err)
-			log.Println("createoffer:", err)
-			log.Println("Resetting rtc")
-			err := pc.Close()
-			if err != nil {
-				log.Println("pcclose:", err)
-			}
-			pc = NewRTCPeerConnection(ws)
+			resetPeerConnection(ws)
 		}
 		return nil
 	})
 
 	ws.Register("disconnect", func(data string) error {
 		log.Println("Received disconnect request")
-			log.Println("createoffer:", err)
-			log.Println("Resetting rtc")
-			err := pc.Close()
-			if err != nil {
-				log.Println("pcclose:", err)
-			}
-			pc = NewRTCPeerConnection(ws)
+		resetPeerConnection(ws)
 		return nil
 	})
 
