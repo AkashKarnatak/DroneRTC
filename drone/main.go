@@ -260,7 +260,7 @@ func (pc *RTCPeerConnection) Close() error {
 }
 
 func resetPeerConnection(ws *Websocket) {
-  log.Println("Resetting rtc")
+	log.Println("Resetting rtc")
 	err := pc.Close()
 	if err != nil {
 		log.Println("pcclose:", err)
@@ -294,23 +294,46 @@ func main() {
 	ws.Register("begin", func(data string) error {
 		offer, err := pc.Conn.CreateOffer(nil)
 		if err != nil {
-      log.Println("createoffer:", err)
-      resetPeerConnection(ws)
+			log.Println("createoffer:", err)
+			log.Println("Resetting rtc")
+			err := pc.Close()
+			if err != nil {
+				log.Println("pcclose:", err)
+			}
+			pc = NewRTCPeerConnection(ws)
 		}
 		offerJson, err := json.Marshal(offer)
 		if err != nil {
-      log.Println("marshal:", err)
-      resetPeerConnection(ws)
+			log.Println("marshal:", err)
+			log.Println("createoffer:", err)
+			log.Println("Resetting rtc")
+			err := pc.Close()
+			if err != nil {
+				log.Println("pcclose:", err)
+			}
+			pc = NewRTCPeerConnection(ws)
 		}
 		err = ws.Emit("description", string(offerJson))
 		if err != nil {
-      log.Println("emit:", err)
-      resetPeerConnection(ws)
+			log.Println("emit:", err)
+			log.Println("createoffer:", err)
+			log.Println("Resetting rtc")
+			err := pc.Close()
+			if err != nil {
+				log.Println("pcclose:", err)
+			}
+			pc = NewRTCPeerConnection(ws)
 		}
 		err = pc.Conn.SetLocalDescription(offer)
 		if err != nil {
-      log.Println("setlocaldesc:", err)
-      resetPeerConnection(ws)
+			log.Println("setlocaldesc:", err)
+			log.Println("createoffer:", err)
+			log.Println("Resetting rtc")
+			err := pc.Close()
+			if err != nil {
+				log.Println("pcclose:", err)
+			}
+			pc = NewRTCPeerConnection(ws)
 		}
 		return nil
 	})
@@ -345,15 +368,27 @@ func main() {
 		}
 		err = pc.Conn.SetRemoteDescription(desc)
 		if err != nil {
-      log.Println("setremovedesc:", err)
-      resetPeerConnection(ws)
+			log.Println("setremovedesc:", err)
+			log.Println("createoffer:", err)
+			log.Println("Resetting rtc")
+			err := pc.Close()
+			if err != nil {
+				log.Println("pcclose:", err)
+			}
+			pc = NewRTCPeerConnection(ws)
 		}
 		return nil
 	})
 
 	ws.Register("disconnect", func(data string) error {
 		log.Println("Received disconnect request")
-    resetPeerConnection(ws)
+			log.Println("createoffer:", err)
+			log.Println("Resetting rtc")
+			err := pc.Close()
+			if err != nil {
+				log.Println("pcclose:", err)
+			}
+			pc = NewRTCPeerConnection(ws)
 		return nil
 	})
 
