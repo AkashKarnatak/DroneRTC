@@ -260,6 +260,7 @@ func (pc *RTCPeerConnection) Close() error {
 }
 
 func resetPeerConnection(ws *Websocket) {
+  log.Println("Resetting rtc")
 	err := pc.Close()
 	if err != nil {
 		log.Println("pcclose:", err)
