@@ -54,6 +54,8 @@ type WebsocketMsg struct {
 type Websocket struct {
 	Conn     *websocket.Conn
 	registry map[string]registryFunc
+	lock     sync.Mutex
+	cnLock   sync.Mutex
 	closeCh  chan struct{}
 	wg       sync.WaitGroup
 }
@@ -73,7 +75,10 @@ func (ws *Websocket) Emit(channel string, data string) error {
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
+	// prevent concurrent writes
+	ws.cnLock.Lock()
 	err = ws.Conn.WriteMessage(websocket.TextMessage, msgJson)
+	ws.cnLock.Unlock()
 	if err != nil {
 		return fmt.Errorf("wswrite: %w", err)
 	}
@@ -81,11 +86,15 @@ func (ws *Websocket) Emit(channel string, data string) error {
 }
 
 func (ws *Websocket) Register(channel string, callback registryFunc) {
+	ws.lock.Lock()
 	ws.registry[channel] = callback
+	ws.lock.Unlock()
 }
 
 func (ws *Websocket) Propagate(channel string, data string) error {
+	ws.lock.Lock()
 	callback, ok := ws.registry[channel]
+	ws.lock.Unlock()
 	if !ok {
 		return nil
 	}
@@ -157,7 +166,7 @@ type RTCPeerConnection struct {
 	wg      sync.WaitGroup
 }
 
-func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
+func initNewRTCPeerConnection(ws *Websocket) {
 	pc = &RTCPeerConnection{
 		closeCh: make(chan struct{}),
 	}
@@ -169,7 +178,7 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 		if err != nil {
 			log.Println("pclose:", err)
 		}
-		pc = NewRTCPeerConnection(ws)
+		initNewRTCPeerConnection(ws)
 	}
 
 	log.Println("Created new rtc", pc)
@@ -270,7 +279,6 @@ func NewRTCPeerConnection(ws *Websocket) *RTCPeerConnection {
 	if err != nil {
 		log.Println("emit:", err)
 	}
-	return pc
 }
 
 func (pc *RTCPeerConnection) Close() error {
@@ -291,7 +299,7 @@ func resetPeerConnection(ws *Websocket) {
 	if err != nil {
 		log.Println("pcclose:", err)
 	}
-	pc = NewRTCPeerConnection(ws)
+	initNewRTCPeerConnection(ws)
 }
 
 func main() {
@@ -307,7 +315,7 @@ func main() {
 	}
 	defer ws.Close()
 
-	pc = NewRTCPeerConnection(ws)
+	initNewRTCPeerConnection(ws)
 
 	ws.Register("connected", func(data string) error {
 		err := ws.Emit("connected", "Hello from drone")
@@ -345,7 +353,7 @@ func main() {
 		return nil
 	})
 
-	ws.Register("message", func(data string) error {
+	ws.Register("msg", func(data string) error {
 		log.Println("Message recv:", data)
 		return nil
 	})
