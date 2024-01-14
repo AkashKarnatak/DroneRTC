@@ -48,9 +48,7 @@ const initializeConnection = async () => {
   pc.oniceconnectionstatechange = async function () {
     console.log(pc.iceConnectionState)
     if (
-      pc.iceConnectionState === 'failed' ||
-      pc.iceConnectionState === 'disconnected' ||
-      pc.iceConnectionState === 'closed'
+      pc.iceConnectionState === 'failed'
     ) {
       pc.close()
       await initializeConnection()
