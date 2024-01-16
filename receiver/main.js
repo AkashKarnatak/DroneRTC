@@ -10,6 +10,7 @@ const $videoPeer = $('#video-peer')
 const $messageBox = $('#message-box')
 const $sendBtn = $('#send-btn')
 const $loader = $('#peer-video-loader')
+const $downloadBtn = $('#download-btn')
 
 $sendBtn.addEventListener('click', () => {
   console.log('Sending msg:', $messageBox.value)
@@ -29,6 +30,36 @@ $videoPeer.addEventListener('play', () => {
   $loader.style.display = 'none'
 })
 
+$downloadBtn.addEventListener('click', () => {
+  stopRecording()
+})
+
+let recorder, stream
+const chunks = []
+
+const stopRecording = () => {
+  try {
+    if (recorder.state != 'inactive') {
+      console.log('stopping')
+      recorder.stop()
+    }
+  } catch (error) {
+    console.log('recorder already inactive')
+  }
+}
+
+const download = () => {
+  const blob = new Blob(chunks, { type: 'video/webm' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.click()
+  console.log(url)
+  chunks.length = 0
+  recorder.start(1000)
+}
+
 const initializeConnection = async () => {
   console.log('creating rtc')
 
@@ -47,9 +78,7 @@ const initializeConnection = async () => {
 
   pc.oniceconnectionstatechange = async function () {
     console.log(pc.iceConnectionState)
-    if (
-      pc.iceConnectionState === 'failed'
-    ) {
+    if (pc.iceConnectionState === 'failed') {
       pc.close()
       await initializeConnection()
     }
@@ -62,10 +91,25 @@ const initializeConnection = async () => {
     ws.emit('iceCandidate', ice)
   }
 
-
   pc.ontrack = (event) => {
     console.log('received track')
     $videoPeer.srcObject = event.streams[0]
+
+    stream = event.streams[0]
+    chunks.length = 0
+
+    recorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm',
+    })
+
+    recorder.ondataavailable = async (e) => {
+      if (e.data.size > 0) {
+        chunks.push(e.data)
+      }
+    }
+    recorder.onerror = stopRecording
+    recorder.onstop = download
+    recorder.start(1000)
   }
 
   ws.emit('clientsOnline')
