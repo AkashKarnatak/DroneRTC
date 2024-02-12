@@ -5,6 +5,7 @@ const $ = (x) => document.querySelector(x)
 const ws = await createSocket()
 
 let pc
+let counter = 0
 
 const $videoPeer = $('#video-peer')
 const $messageBox = $('#message-box')
@@ -53,7 +54,7 @@ const download = () => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.target = '_blank'
+  a.download = `dronertc${counter}.webm`
   a.click()
   console.log(url)
   chunks.length = 0
