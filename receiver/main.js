@@ -80,6 +80,7 @@ const initializeConnection = async () => {
   pc.oniceconnectionstatechange = async function () {
     console.log(pc.iceConnectionState)
     if (pc.iceConnectionState === 'failed') {
+      stopRecording()
       pc.close()
       await initializeConnection()
     }
@@ -141,6 +142,7 @@ ws.register('description', async (data) => {
 
 ws.register('disconnect', async () => {
   console.log('received disconnect request')
+  stopRecording()
   pc.close()
   await initializeConnection()
 })
