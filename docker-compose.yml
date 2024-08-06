@@ -3,10 +3,9 @@ services:
     build:
       context: .
     image: ghcr.io/akashkarnatak/dronertc:0.1.1
-    volumes:
-      - ./receiver/env.js:/app/receiver/env.js
     environment:
-      - SERVER_PORT=8080
+      - SERVER_PORT=$SERVER_PORT
+      - WEBSOCKET_URL=$WEBSOCKET_URL
     ports:
-      - 8080:8080
+      - $SERVER_PORT:$SERVER_PORT
     command: node server/app.js

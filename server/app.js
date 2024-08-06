@@ -1,11 +1,19 @@
 import express from 'express'
+import fs from 'node:fs/promises'
 import { WebSocket, WebSocketServer } from 'ws'
 
 const SERVER_PORT = process.env.SERVER_PORT
+const WEBSOCKET_URL = process.env.WEBSOCKET_URL
 
-if (!SERVER_PORT) {
+if (!SERVER_PORT || !WEBSOCKET_URL) {
   throw new Error('Forgot to initialze some variables')
 }
+
+// create env file for receiver
+await fs.writeFile(
+  './receiver/env.js',
+  `export const WEBSOCKET_URL="${WEBSOCKET_URL}"`,
+)
 
 Array.prototype.random = function () {
   return this[Math.floor(Math.random() * this.length)]
@@ -56,12 +64,19 @@ wss.drones = new Map()
 wss.receivers = new Map()
 wss.on('connection', (ws, req) => {
   console.log('new connection')
-  ws.send(JSON.stringify({ channel: 'message', data: JSON.stringify({ what: true }) }))
+  ws.send(
+    JSON.stringify({
+      channel: 'message',
+      data: JSON.stringify({ what: true }),
+    }),
+  )
 
   ws.init()
 
   ws.register('clientsOnline', () => {
-    ws.send(JSON.stringify({ channel: 'clientsOnline', data: '' + wss.clients.size }))
+    ws.send(
+      JSON.stringify({ channel: 'clientsOnline', data: '' + wss.clients.size }),
+    )
   })
 
   ws.register('match', async (data) => {
@@ -74,7 +89,7 @@ wss.on('connection', (ws, req) => {
     if (!['drone', 'receiver'].includes(type)) return
 
     console.log(type)
-    
+
     ws.selfMap = type === 'drone' ? wss.drones : wss.receivers
     ws.peerMap = type === 'drone' ? wss.receivers : wss.drones
 
@@ -85,7 +100,7 @@ wss.on('connection', (ws, req) => {
       // push to queue
       console.log('No peers found')
       console.log(
-        `Pushing ${req.socket.remoteAddress}:${req.socket.remotePort} to queue`
+        `Pushing ${req.socket.remoteAddress}:${req.socket.remotePort} to queue`,
       )
       ws.selfMap.set(ws, id)
       return
@@ -94,7 +109,7 @@ wss.on('connection', (ws, req) => {
     const peerId = ws.peerMap.get(peer) // TODO: user it somewhere
     console.log('peer available:')
     console.log(
-      `matching ${req.socket.remoteAddress}:${req.socket.remotePort} now`
+      `matching ${req.socket.remoteAddress}:${req.socket.remotePort} now`,
     )
 
     // remove peer from queue
@@ -117,7 +132,7 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     console.log(
-      `${req.socket.remoteAddress}:${req.socket.remotePort} disconnected`
+      `${req.socket.remoteAddress}:${req.socket.remotePort} disconnected`,
     )
     if (ws.peer) {
       ws.peer.send(JSON.stringify({ channel: 'disconnect', data: '' }))
