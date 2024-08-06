@@ -2,7 +2,7 @@ services:
   app:
     build:
       context: .
-    image: ghcr.io/akashkarnatak/dronertc:0.1.0
+    image: ghcr.io/akashkarnatak/dronertc:0.1.1
     volumes:
       - ./receiver/env.js:/app/receiver/env.js
     environment:
