@@ -2,7 +2,7 @@ services:
   app:
     build:
       context: .
-    image: ghcr.io/akashkarnatak/dronertc:0.1.1
+    image: ghcr.io/akashkarnatak/dronertc:0.1.2
     environment:
       - SERVER_PORT=$SERVER_PORT
       - WEBSOCKET_URL=$WEBSOCKET_URL
