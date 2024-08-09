@@ -105,8 +105,8 @@ func (ws *Websocket) Propagate(channel string, data string) error {
 	return nil
 }
 
-func (ws *Websocket) Connect(host string) error {
-	u := url.URL{Scheme: "ws", Host: host, Path: "/"}
+func (ws *Websocket) Connect(scheme string, host string) error {
+	u := url.URL{Scheme: scheme, Host: host, Path: "/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
@@ -304,12 +304,16 @@ func resetPeerConnection(ws *Websocket) {
 
 func main() {
 	host := os.Getenv("HOST")
+	scheme := os.Getenv("SCHEME")
 	if host == "" {
 		log.Fatalln("Forgot to set HOST environment variable")
 	}
+	if scheme == "" {
+		log.Fatalln("Forgot to set SCHEME environment variable")
+	}
 
 	ws := NewWebsocket()
-	err := ws.Connect(host)
+	err := ws.Connect(scheme, host)
 	if err != nil {
 		log.Fatalln("connect:", err)
 	}
