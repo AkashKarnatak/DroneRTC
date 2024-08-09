@@ -2,3 +2,4 @@ env*.js
 node_modules/
 .env*.local
 .env
+drone
