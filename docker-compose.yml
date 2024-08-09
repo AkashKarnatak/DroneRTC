@@ -2,10 +2,13 @@ services:
   app:
     build:
       context: .
-    image: ghcr.io/akashkarnatak/dronertc:0.1.2
+    image: ghcr.io/akashkarnatak/dronertc:0.1.2-mavproxy
     environment:
       - SERVER_PORT=$SERVER_PORT
       - WEBSOCKET_URL=$WEBSOCKET_URL
+      - HOST=$HOST
     ports:
       - $SERVER_PORT:$SERVER_PORT
-    command: node server/app.js
+      - 14550:14550
+      - 9000:9000
+    command: bash entry.sh
